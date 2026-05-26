@@ -15,6 +15,16 @@ function ranking(score: number) {
   return { label: "Cold", icon: Snowflake, className: "border-slate-300/20 bg-slate-400/10 text-slate-200" };
 }
 
+function potentialRevenue(notes: string, score: number) {
+  const match = notes.match(/\[potential_revenue:(\d+(?:\.\d+)?)\]/);
+  if (match) return Number(match[1]);
+  return Math.max(1000, Math.round(score / 10) * 500);
+}
+
+function cleanNotes(notes: string) {
+  return notes.replace(/\[potential_revenue:\d+(?:\.\d+)?\]\s*/, "").trim();
+}
+
 function stageLabel(status: string) {
   if (["Booked", "Interested"].includes(status)) return "Next Up";
   if (status === "Follow Up") return "Follow Up";
@@ -29,7 +39,7 @@ export default async function PipelineClientsPage() {
   const hot = potential.filter((lead) => lead.score >= 75).length;
   const warm = potential.filter((lead) => lead.score >= 55 && lead.score < 75).length;
   const cold = potential.filter((lead) => lead.score < 55).length;
-  const pipelineValue = potential.reduce((sum, lead) => sum + Math.max(1000, Math.round(lead.score / 10) * 500), 0);
+  const pipelineValue = potential.reduce((sum, lead) => sum + potentialRevenue(lead.notes, lead.score), 0);
   const activeValue = active.length * 3000;
 
   return (
@@ -42,8 +52,9 @@ export default async function PipelineClientsPage() {
         {potential.map((lead) => {
           const rank = ranking(lead.score);
           const RankIcon = rank.icon;
-          const value = Math.max(1000, Math.round(lead.score / 10) * 500);
-          return <Link key={lead.id} href={`/contacts/${lead.id}`} className="card block p-5 hover:border-sky-300/30"><div className="mb-3 flex items-start justify-between gap-3"><div><h2 className="text-lg font-black text-white">{lead.business}</h2><p className="text-sm text-slate-500">{lead.contact || [lead.city, lead.state].filter(Boolean).join(", ") || "No contact"}</p></div><span className={`badge ${rank.className}`}><RankIcon className="mr-1 size-3" /> {rank.label}</span></div><div className="mb-3 flex gap-2"><span className="badge">{stageLabel(lead.status)}</span><span className="badge">Score {lead.score}</span></div><div className="surface p-4"><div className="flex items-end justify-between"><div><div className="text-2xl font-black text-white">{money(value)}</div><div className="label">Potential</div></div><div className="text-xs text-slate-500">Retainer: {money(value + 900)}</div></div></div><p className="mt-4 line-clamp-2 text-sm leading-5 text-slate-400">{lead.notes || `${lead.status} account from ${lead.source || "CRM"}. Open this account to log the next call or update notes.`}</p></Link>;
+          const value = potentialRevenue(lead.notes, lead.score);
+          const displayNotes = cleanNotes(lead.notes);
+          return <Link key={lead.id} href={`/contacts/${lead.id}`} className="card block p-5 hover:border-sky-300/30"><div className="mb-3 flex items-start justify-between gap-3"><div><h2 className="text-lg font-black text-white">{lead.business}</h2><p className="text-sm text-slate-500">{lead.contact || [lead.city, lead.state].filter(Boolean).join(", ") || "No contact"}</p></div><span className={`badge ${rank.className}`}><RankIcon className="mr-1 size-3" /> {rank.label}</span></div><div className="mb-3 flex gap-2"><span className="badge">{stageLabel(lead.status)}</span><span className="badge">Score {lead.score}</span></div><div className="surface p-4"><div className="flex items-end justify-between"><div><div className="text-2xl font-black text-white">{money(value)}</div><div className="label">Potential</div></div><div className="text-xs text-slate-500">Retainer: {money(value + 900)}</div></div></div><p className="mt-4 line-clamp-2 text-sm leading-5 text-slate-400">{displayNotes || `${lead.status} account from ${lead.source || "CRM"}. Open this account to log the next call or update notes.`}</p></Link>;
         })}
       </div>
     </>
