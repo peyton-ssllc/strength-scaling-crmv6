@@ -18,9 +18,9 @@ export async function createContact(formData: FormData) {
   const businessName = text(formData, "businessName");
   if (!businessName) throw new Error("Business name is required");
 
-  const potentialRevenue = text(formData, "potentialRevenue");
   const rawNotes = text(formData, "notes");
-  const finalNotes = potentialRevenue ? `[potential_revenue:${potentialRevenue}] ${rawNotes}`.trim() : rawNotes;
+  const monthlyRetainer = Number(formData.get("monthlyRetainer") || formData.get("potentialRevenue") || 0);
+  const monthlyProfit = Number(formData.get("estimatedMonthlyProfit") || monthlyRetainer || 0);
 
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
@@ -37,8 +37,13 @@ export async function createContact(formData: FormData) {
       lead_source: text(formData, "source") || "Manual Entry",
       status: statusToDb(text(formData, "status") || "New"),
       score: number(formData, "score"),
-      notes: finalNotes || null,
-      notes_summary: finalNotes || null
+      pipeline_status: text(formData, "pipelineStatus") || "next_up",
+      pipeline_rank: text(formData, "pipelineRank") || "warm",
+      monthly_retainer: Number.isFinite(monthlyRetainer) ? monthlyRetainer : 0,
+      estimated_monthly_profit: Number.isFinite(monthlyProfit) ? monthlyProfit : 0,
+      pipeline_notes: rawNotes || null,
+      notes: rawNotes || null,
+      notes_summary: rawNotes || null
     })
     .select("id")
     .single();
