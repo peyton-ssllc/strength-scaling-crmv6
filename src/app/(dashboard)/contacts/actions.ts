@@ -18,6 +18,10 @@ export async function createContact(formData: FormData) {
   const businessName = text(formData, "businessName");
   if (!businessName) throw new Error("Business name is required");
 
+  const potentialRevenue = text(formData, "potentialRevenue");
+  const rawNotes = text(formData, "notes");
+  const finalNotes = potentialRevenue ? `[potential_revenue:${potentialRevenue}] ${rawNotes}`.trim() : rawNotes;
+
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("leads")
@@ -33,8 +37,8 @@ export async function createContact(formData: FormData) {
       lead_source: text(formData, "source") || "Manual Entry",
       status: statusToDb(text(formData, "status") || "New"),
       score: number(formData, "score"),
-      notes: text(formData, "notes") || null,
-      notes_summary: text(formData, "notes") || null
+      notes: finalNotes || null,
+      notes_summary: finalNotes || null
     })
     .select("id")
     .single();
