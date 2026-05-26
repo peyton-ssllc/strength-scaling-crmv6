@@ -14,6 +14,11 @@ export type Lead = {
   notes: string;
   lastContacted: string;
   createdAt: string;
+  pipelineStatus: string;
+  pipelineRank: string;
+  monthlyRetainer: number;
+  estimatedMonthlyProfit: number;
+  pipelineNotes: string;
 };
 
 export type Activity = {
