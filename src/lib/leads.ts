@@ -2,7 +2,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase";
 import { clean, readableStatus } from "@/lib/format";
 import type { Lead } from "@/lib/types";
 
-const columns = "id,business_name,contact_name,owner_name,phone,email,city,state,status,score,lead_source,notes,notes_summary,last_contacted_at,created_at";
+const columns = "id,business_name,contact_name,owner_name,phone,email,city,state,status,score,lead_source,notes,notes_summary,last_contacted_at,created_at,pipeline_status,pipeline_rank,monthly_retainer,estimated_monthly_profit,pipeline_notes";
 
 type LeadRow = {
   id: string;
@@ -20,6 +20,11 @@ type LeadRow = {
   notes_summary: string | null;
   last_contacted_at: string | null;
   created_at: string | null;
+  pipeline_status: string | null;
+  pipeline_rank: string | null;
+  monthly_retainer: number | null;
+  estimated_monthly_profit: number | null;
+  pipeline_notes: string | null;
 };
 
 function toLead(row: LeadRow): Lead {
@@ -36,7 +41,12 @@ function toLead(row: LeadRow): Lead {
     source: clean(row.lead_source),
     notes: clean(row.notes) || clean(row.notes_summary),
     lastContacted: row.last_contacted_at ? new Date(row.last_contacted_at).toLocaleDateString() : "",
-    createdAt: row.created_at || ""
+    createdAt: row.created_at || "",
+    pipelineStatus: clean(row.pipeline_status) || "next_up",
+    pipelineRank: clean(row.pipeline_rank) || "warm",
+    monthlyRetainer: Number(row.monthly_retainer || 0),
+    estimatedMonthlyProfit: Number(row.estimated_monthly_profit || row.monthly_retainer || 0),
+    pipelineNotes: clean(row.pipeline_notes)
   };
 }
 
