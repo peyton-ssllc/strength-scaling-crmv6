@@ -4,7 +4,7 @@ import { ArrowLeft, Building2, CalendarClock, Mail, MapPin, NotebookPen, Phone, 
 import { PageHeader } from "@/components/crm/page-header";
 import { getLeadActivities, getLeadById, getLeadOwner, getTeamMembers } from "@/lib/leads";
 import { deleteContact } from "../actions";
-import { addContactNote, assignContactOwner, logContactOutcome } from "./actions";
+import { addContactNote, addContactToPipeline, assignContactOwner, logContactOutcome } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,11 @@ function money(value: number) {
 function dateTime(value: string) {
   if (!value) return "";
   return new Date(value).toLocaleString();
+}
+
+function isPipelineAccount(contact: Awaited<ReturnType<typeof getLeadById>>) {
+  if (!contact) return false;
+  return contact.source === "Pipeline Manual Entry" || contact.pipelineStatus !== "next_up" || contact.monthlyRetainer > 0 || contact.estimatedMonthlyProfit > 0 || Boolean(contact.pipelineNotes);
 }
 
 function typeLabel(type: string) {
@@ -34,6 +39,8 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const contact = await getLeadById(id);
   if (!contact) notFound();
+
+  const inPipeline = isPipelineAccount(contact);
 
   const [activities, members, owner] = await Promise.all([
     getLeadActivities(id),
@@ -80,7 +87,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
             </div>
 
             <div className="card p-6">
-              <div className="mb-4 flex items-center gap-2 font-black text-white"><Building2 className="size-5 text-sky-300" /> Pipeline Snapshot</div>
+              <div className="mb-4 flex items-center justify-between gap-3"><div className="flex items-center gap-2 font-black text-white"><Building2 className="size-5 text-sky-300" /> Pipeline Snapshot</div>{inPipeline ? <Link href="/pipeline-clients" className="rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-xs font-black text-emerald-200">In Pipeline</Link> : <form action={addContactToPipeline}><input type="hidden" name="leadId" value={contact.id} /><button type="submit" className="rounded-lg border border-sky-300/30 bg-sky-400/10 px-3 py-2 text-xs font-black text-sky-200">Add to Pipeline</button></form>}</div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="surface p-4"><div className="label">Rank</div><div className="mt-1 font-black text-white">{contact.pipelineRank || "Warm"}</div></div>
                 <div className="surface p-4"><div className="label">Stage</div><div className="mt-1 font-black text-white">{contact.pipelineStatus || "Next Up"}</div></div>
