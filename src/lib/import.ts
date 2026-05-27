@@ -214,8 +214,15 @@ export async function importLeadsFromCsv(csvText: string): Promise<ImportResult>
       const assignedTo = ownerEmail ? ownerMap.get(ownerEmail) ?? null : null;
 
       const notes = get(row, ["notes", "note", "current_notes", "pipeline_notes"]);
+
       const retainer = parseNumber(
-        get(row, ["monthly_retainer", "retainer", "monthly_revenue", "potential_revenue"]),
+        get(row, [
+          "monthly_retainer",
+          "retainer",
+          "monthly_revenue",
+          "potential_revenue",
+          "potential",
+        ]),
         0
       );
 
@@ -252,7 +259,7 @@ export async function importLeadsFromCsv(csvText: string): Promise<ImportResult>
         pipeline_notes: notes,
       };
     })
-    .filter(Boolean);
+    .filter((lead): lead is NonNullable<typeof lead> => lead !== null);
 
   if (leads.length === 0) {
     return {
@@ -279,4 +286,10 @@ export async function importLeadsFromFile(file: File): Promise<ImportResult> {
   const text = await file.text();
   return importLeadsFromCsv(text);
 }
-export const importCsvLeads = importLeadsFromCsv;
+
+export async function importCsvLeads(
+  csvText: string,
+  _fileName?: string
+): Promise<ImportResult> {
+  return importLeadsFromCsv(csvText);
+}
