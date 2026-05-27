@@ -2,7 +2,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase";
 import { clean, readableStatus } from "@/lib/format";
 import type { Lead } from "@/lib/types";
 
-const columns = "id,business_name,contact_name,owner_name,phone,email,city,state,status,score,lead_source,notes,notes_summary,last_contacted_at,created_at,pipeline_status,pipeline_rank,monthly_retainer,estimated_monthly_profit,pipeline_notes";
+const columns = "id,business_name,contact_name,owner_name,phone,email,city,state,status,score,lead_source,notes,notes_summary,last_contacted_at,created_at,pipeline_status,pipeline_rank,monthly_retainer,estimated_monthly_profit,pipeline_notes,assigned_to";
 
 type LeadRow = {
   id: string;
@@ -25,6 +25,7 @@ type LeadRow = {
   monthly_retainer: number | null;
   estimated_monthly_profit: number | null;
   pipeline_notes: string | null;
+  assigned_to: string | null;
 };
 
 function toLead(row: LeadRow): Lead {
@@ -46,7 +47,8 @@ function toLead(row: LeadRow): Lead {
     pipelineRank: clean(row.pipeline_rank) || "warm",
     monthlyRetainer: Number(row.monthly_retainer || 0),
     estimatedMonthlyProfit: Number(row.estimated_monthly_profit || row.monthly_retainer || 0),
-    pipelineNotes: clean(row.pipeline_notes)
+    pipelineNotes: clean(row.pipeline_notes),
+    assignedTo: clean(row.assigned_to)
   };
 }
 
@@ -84,7 +86,7 @@ export async function getLeadActivities(leadId: string) {
     .select("id,lead_id,type,outcome,note,created_at")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false })
-    .limit(25);
+    .limit(50);
 
   return (data || []).map((item: any) => ({
     id: item.id,
@@ -94,4 +96,25 @@ export async function getLeadActivities(leadId: string) {
     note: item.note || "",
     createdAt: item.created_at || ""
   }));
+}
+
+export async function getTeamMembers() {
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id,full_name,email,role,is_active")
+    .eq("is_active", true)
+    .order("full_name", { ascending: true });
+  return data || [];
+}
+
+export async function getLeadOwner(ownerId: string) {
+  if (!ownerId) return null;
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id,full_name,email,role")
+    .eq("id", ownerId)
+    .maybeSingle();
+  return data;
 }
