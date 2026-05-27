@@ -21,8 +21,12 @@ function clean(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function normalizeEmail(value: string) {
+  return clean(value).toLowerCase().replace(/\s+/g, "");
+}
+
 function normalizeHeader(header: string) {
-  return header.trim().toLowerCase().replace(/\s+/g, "_");
+  return clean(header).toLowerCase().replace(/\s+/g, "_");
 }
 
 function get(row: CsvRow, keys: string[]) {
@@ -69,9 +73,12 @@ function parseCsv(text: string): CsvRow[] {
 
     if ((char === "\n" || char === "\r") && !insideQuotes) {
       if (char === "\r" && next === "\n") index += 1;
+
       row.push(current);
 
-      if (row.some((cell) => cell.trim())) rows.push(row);
+      if (row.some((cell) => cell.trim())) {
+        rows.push(row);
+      }
 
       row = [];
       current = "";
@@ -82,15 +89,20 @@ function parseCsv(text: string): CsvRow[] {
   }
 
   row.push(current);
-  if (row.some((cell) => cell.trim())) rows.push(row);
+
+  if (row.some((cell) => cell.trim())) {
+    rows.push(row);
+  }
 
   const headers = rows[0]?.map(normalizeHeader) ?? [];
 
   return rows.slice(1).map((cells) => {
     const output: CsvRow = {};
+
     headers.forEach((header, index) => {
       output[header] = clean(cells[index]);
     });
+
     return output;
   });
 }
@@ -171,7 +183,7 @@ export async function importLeadsFromCsv(csvText: string): Promise<ImportResult>
 
   for (const profile of profiles ?? []) {
     if (profile.id && profile.email && profile.is_active !== false) {
-      ownerMap.set(profile.email.toLowerCase().trim(), profile.id);
+      ownerMap.set(normalizeEmail(profile.email), profile.id);
     }
   }
 
@@ -190,7 +202,7 @@ export async function importLeadsFromCsv(csvText: string): Promise<ImportResult>
 
       if (!businessName) return null;
 
-      const ownerEmail = get(row, ownerEmailColumns).toLowerCase().trim();
+      const ownerEmail = normalizeEmail(get(row, ownerEmailColumns));
       const assignedTo = ownerEmail ? ownerMap.get(ownerEmail) ?? null : null;
 
       if (ownerEmail && !assignedTo) {
