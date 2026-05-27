@@ -4,10 +4,14 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { normalizeStatus, todayIso } from "@/lib/format";
 
+function text(formData: FormData, key: string) {
+  return String(formData.get(key) || "").trim();
+}
+
 export async function logContactOutcome(formData: FormData) {
-  const leadId = String(formData.get("leadId") || "");
-  const outcome = String(formData.get("outcome") || "Called");
-  const note = String(formData.get("note") || "");
+  const leadId = text(formData, "leadId");
+  const outcome = text(formData, "outcome") || "Called";
+  const note = text(formData, "note");
 
   if (!leadId) throw new Error("Missing lead id");
 
@@ -21,15 +25,17 @@ export async function logContactOutcome(formData: FormData) {
   });
   if (activityError) throw new Error(activityError.message);
 
-  const { error: leadError } = await supabase
-    .from("leads")
-    .update({
-      status: normalizeStatus(outcome),
-      notes: note,
-      notes_summary: note,
-      last_contacted_at: todayIso()
-    })
-    .eq("id", leadId);
+  const update: Record<string, string> = {
+    status: normalizeStatus(outcome),
+    last_contacted_at: todayIso()
+  };
+
+  if (note) {
+    update.notes = note;
+    update.notes_summary = note;
+  }
+
+  const { error: leadError } = await supabase.from("leads").update(update).eq("id", leadId);
   if (leadError) throw new Error(leadError.message);
 
   revalidatePath("/contacts");
@@ -37,4 +43,61 @@ export async function logContactOutcome(formData: FormData) {
   revalidatePath("/queue");
   revalidatePath("/dashboard");
   revalidatePath("/pipeline-clients");
+}
+
+export async function addContactNote(formData: FormData) {
+  const leadId = text(formData, "leadId");
+  const note = text(formData, "note");
+
+  if (!leadId) throw new Error("Missing lead id");
+  if (!note) throw new Error("Write a note first");
+
+  const supabase = createSupabaseAdminClient();
+
+  const { error: activityError } = await supabase.from("activities").insert({
+    lead_id: leadId,
+    type: "note",
+    outcome: "Note Added",
+    note
+  });
+  if (activityError) throw new Error(activityError.message);
+
+  const { error: leadError } = await supabase
+    .from("leads")
+    .update({ notes: note, notes_summary: note })
+    .eq("id", leadId);
+  if (leadError) throw new Error(leadError.message);
+
+  revalidatePath("/contacts");
+  revalidatePath(`/contacts/${leadId}`);
+}
+
+export async function assignContactOwner(formData: FormData) {
+  const leadId = text(formData, "leadId");
+  const ownerId = text(formData, "ownerId");
+
+  if (!leadId) throw new Error("Missing lead id");
+
+  const supabase = createSupabaseAdminClient();
+
+  const { data: owner } = ownerId
+    ? await supabase.from("profiles").select("full_name,email").eq("id", ownerId).maybeSingle()
+    : ({ data: null } as any);
+
+  const { error: leadError } = await supabase
+    .from("leads")
+    .update({ assigned_to: ownerId || null })
+    .eq("id", leadId);
+  if (leadError) throw new Error(leadError.message);
+
+  await supabase.from("activities").insert({
+    lead_id: leadId,
+    type: "status_change",
+    outcome: "Owner Updated",
+    note: ownerId ? `Assigned to ${owner?.full_name || owner?.email || "team member"}` : "Owner cleared"
+  });
+
+  revalidatePath("/contacts");
+  revalidatePath(`/contacts/${leadId}`);
+  revalidatePath("/queue");
 }
