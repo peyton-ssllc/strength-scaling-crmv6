@@ -1,148 +1,167 @@
-import { createSupabaseAdminClient } from "@/lib/supabase";
-import { readableStatus } from "@/lib/format";
+import { createSupabaseAdminClient } from "@/lib/admin";
 
-export type OutcomeMetric = {
-  label: string;
-  count: number;
-  percent: number;
-};
-
-export type DayMetric = {
-  label: string;
-  calls: number;
-};
-
-export type PipelineMetric = {
-  label: string;
-  count: number;
-};
-
-export type RecentActivity = {
+export type ReportingRep = {
   id: string;
-  leadId: string;
-  business: string;
-  outcome: string;
-  note: string;
-  createdAt: string;
+  name: string;
+  email: string;
+  role: string;
 };
 
-function startOfWindow(days: number) {
+export type DashboardReport = {
+  totalLeads: number;
+  callsToday: number;
+  connectRate: number;
+  bookedThisWeek: number;
+  callsByDay: { label: string; count: number }[];
+  outcomeBreakdown: { outcome: string; count: number; percent: number }[];
+  pipelineBreakdown: { label: string; count: number }[];
+};
+
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function daysAgo(days: number) {
   const date = new Date();
-  date.setDate(date.getDate() - days + 1);
-  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - days);
   return date;
 }
 
-function shortDay(date: Date) {
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+function readableStatus(status: string | null | undefined) {
+  if (!status) return "New";
+
+  return status
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function pct(part: number, total: number) {
-  if (!total) return 0;
-  return Math.round((part / total) * 100);
-}
-
-function normalizeOutcome(value: string | null | undefined) {
-  const raw = String(value || "Called").trim().toLowerCase();
-  if (raw.includes("book")) return "Booked";
-  if (raw.includes("interest")) return "Interested";
-  if (raw.includes("follow")) return "Follow Up";
-  if (raw.includes("callback")) return "Callback";
-  if (raw.includes("dnc") || raw.includes("dq")) return "DNC";
-  if (raw.includes("lost")) return "Lost";
-  if (raw.includes("no answer")) return "No Answer";
-  if (raw.includes("vm") || raw.includes("voicemail")) return "Left VM";
-  return "Called";
-}
-
-export async function getDashboardReport(days = 14) {
+export async function getReportingReps(): Promise<ReportingRep[]> {
   const supabase = createSupabaseAdminClient();
-  const since = startOfWindow(days);
-  const sinceIso = since.toISOString();
 
-  const [{ data: leads }, { data: activities }] = await Promise.all([
-    supabase.from("leads").select("id,business_name,status,score,created_at"),
-    supabase
-      .from("activities")
-      .select("id,lead_id,type,outcome,note,created_at")
-      .gte("created_at", sinceIso)
-      .order("created_at", { ascending: false })
-      .limit(1000)
-  ]);
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, role")
+    .eq("is_active", true)
+    .order("full_name", { ascending: true });
 
-  const leadRows = leads || [];
-  const activityRows = (activities || []).filter((item: any) => (item.type || "call") === "call");
-  const leadById = new Map(leadRows.map((lead: any) => [lead.id, lead]));
+  return (data ?? []).map((rep) => ({
+    id: rep.id,
+    name: rep.full_name || rep.email || "Unnamed Rep",
+    email: rep.email || "",
+    role: rep.role || "sdr",
+  }));
+}
 
-  const totalLeads = leadRows.length;
-  const calls = activityRows.length;
-  const booked = activityRows.filter((item: any) => normalizeOutcome(item.outcome) === "Booked").length;
-  const connected = activityRows.filter((item: any) => {
-    const outcome = normalizeOutcome(item.outcome);
-    return ["Booked", "Interested", "Follow Up", "Callback", "Called"].includes(outcome);
-  }).length;
+export async function getDashboardReport(
+  selectedRep: string = "all",
+  days: number = 14
+): Promise<DashboardReport> {
+  const supabase = createSupabaseAdminClient();
 
-  const daysList: DayMetric[] = Array.from({ length: days }).map((_, index) => {
-    const date = new Date(since);
-    date.setDate(since.getDate() + index);
-    return { label: shortDay(date), calls: 0 };
-  });
+  const since = daysAgo(days).toISOString();
+  const today = startOfDay(new Date()).toISOString();
+  const weekStart = daysAgo(7).toISOString();
 
-  const dayIndexByKey = new Map<string, number>();
-  daysList.forEach((_, index) => {
-    const date = new Date(since);
-    date.setDate(since.getDate() + index);
-    dayIndexByKey.set(date.toISOString().slice(0, 10), index);
-  });
+  const leadsQuery = supabase
+    .from("leads")
+    .select("id, status, assigned_to, pipeline_status, created_at");
 
-  activityRows.forEach((item: any) => {
-    const key = String(item.created_at || "").slice(0, 10);
-    const index = dayIndexByKey.get(key);
-    if (index !== undefined) daysList[index].calls += 1;
-  });
+  if (selectedRep !== "all" && selectedRep !== "unassigned") {
+    leadsQuery.eq("assigned_to", selectedRep);
+  }
 
-  const outcomeCounts = new Map<string, number>();
-  activityRows.forEach((item: any) => {
-    const label = normalizeOutcome(item.outcome);
-    outcomeCounts.set(label, (outcomeCounts.get(label) || 0) + 1);
-  });
+  if (selectedRep === "unassigned") {
+    leadsQuery.is("assigned_to", null);
+  }
 
-  const outcomes: OutcomeMetric[] = Array.from(outcomeCounts.entries())
-    .map(([label, count]) => ({ label, count, percent: pct(count, calls) }))
+  const { data: leads } = await leadsQuery;
+
+  let activitiesQuery = supabase
+    .from("activities")
+    .select("id, lead_id, rep_id, type, outcome, created_at")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false });
+
+  if (selectedRep !== "all" && selectedRep !== "unassigned") {
+    activitiesQuery = activitiesQuery.eq("rep_id", selectedRep);
+  }
+
+  if (selectedRep === "unassigned") {
+    activitiesQuery = activitiesQuery.is("rep_id", null);
+  }
+
+  const { data: activities } = await activitiesQuery;
+
+  const safeLeads = leads ?? [];
+  const safeActivities = activities ?? [];
+
+  const calls = safeActivities.filter((activity) => activity.type === "call");
+  const callsToday = calls.filter((activity) => activity.created_at >= today);
+  const bookedThisWeek = safeActivities.filter(
+    (activity) =>
+      activity.created_at >= weekStart &&
+      (activity.outcome === "Booked" ||
+        activity.outcome === "Meeting Booked" ||
+        activity.outcome === "Booked Meeting")
+  );
+
+  const connectedCalls = calls.filter((activity) =>
+    ["Connected", "Spoke", "Interested", "Booked", "Meeting Booked"].includes(
+      activity.outcome || ""
+    )
+  );
+
+  const connectRate =
+    calls.length > 0 ? Math.round((connectedCalls.length / calls.length) * 100) : 0;
+
+  const callsByDay = Array.from({ length: days })
+    .map((_, index) => {
+      const date = daysAgo(days - index - 1);
+      const dateKey = date.toISOString().slice(0, 10);
+
+      return {
+        label: date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
+        count: calls.filter((call) => call.created_at.slice(0, 10) === dateKey)
+          .length,
+      };
+    });
+
+  const outcomeCounts = calls.reduce<Record<string, number>>((acc, activity) => {
+    const outcome = activity.outcome || "No Outcome";
+    acc[outcome] = (acc[outcome] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const outcomeBreakdown = Object.entries(outcomeCounts)
+    .map(([outcome, count]) => ({
+      outcome,
+      count,
+      percent: calls.length > 0 ? Math.round((count / calls.length) * 100) : 0,
+    }))
     .sort((a, b) => b.count - a.count);
 
-  const pipelineCounts = new Map<string, number>();
-  leadRows.forEach((lead: any) => {
-    const label = readableStatus(lead.status);
-    pipelineCounts.set(label, (pipelineCounts.get(label) || 0) + 1);
-  });
+  const pipelineCounts = safeLeads.reduce<Record<string, number>>((acc, lead) => {
+    const label = readableStatus(lead.pipeline_status || lead.status);
+    acc[label] = (acc[label] ?? 0) + 1;
+    return acc;
+  }, {});
 
-  const pipeline: PipelineMetric[] = Array.from(pipelineCounts.entries())
+  const pipelineBreakdown = Object.entries(pipelineCounts)
     .map(([label, count]) => ({ label, count }))
     .sort((a, b) => b.count - a.count);
 
-  const recent: RecentActivity[] = activityRows.slice(0, 10).map((item: any) => {
-    const lead = leadById.get(item.lead_id) as any;
-    return {
-      id: item.id,
-      leadId: item.lead_id,
-      business: lead?.business_name || "Unknown Lead",
-      outcome: normalizeOutcome(item.outcome),
-      note: item.note || "",
-      createdAt: item.created_at || ""
-    };
-  });
-
   return {
-    totalLeads,
-    calls,
-    booked,
-    connected,
-    connectRate: pct(connected, calls),
-    bookedRate: pct(booked, calls),
-    days: daysList,
-    outcomes,
-    pipeline,
-    recent
+    totalLeads: safeLeads.length,
+    callsToday: callsToday.length,
+    connectRate,
+    bookedThisWeek: bookedThisWeek.length,
+    callsByDay,
+    outcomeBreakdown,
+    pipelineBreakdown,
   };
 }
