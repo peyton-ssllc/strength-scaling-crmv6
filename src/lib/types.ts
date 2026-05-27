@@ -19,6 +19,7 @@ export type Lead = {
   monthlyRetainer: number;
   estimatedMonthlyProfit: number;
   pipelineNotes: string;
+  assignedTo: string;
 };
 
 export type Activity = {
