@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/crm/page-header";
 import { createSupabaseAdminClient } from "@/lib/supabase";
+import { getCurrentProfile } from "@/lib/auth/server";
 import { createRepLogin } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +13,8 @@ async function getMembers() {
 }
 
 export default async function MembersPage() {
+  const profile = await getCurrentProfile();
+  if (profile?.role !== "admin") redirect("/queue");
   const members = await getMembers();
   return (
     <>
