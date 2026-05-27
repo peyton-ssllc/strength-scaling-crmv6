@@ -269,7 +269,22 @@ export async function importLeadsFromCsv(csvText: string): Promise<ImportResult>
     throw new Error(error.message);
   }
 
-  return {
+   return {
     imported: leads.length,
     inserted: leads.length,
     skipped: rows.length - leads.length,
+    unmatchedOwners: Array.from(unmatchedOwners),
+  };
+}
+
+export async function importLeadsFromFile(file: File): Promise<ImportResult> {
+  const text = await file.text();
+  return importLeadsFromCsv(text);
+}
+
+export async function importCsvLeads(
+  csvText: string,
+  _fileName?: string
+): Promise<ImportResult> {
+  return importLeadsFromCsv(csvText);
+}
