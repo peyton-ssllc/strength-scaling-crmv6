@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase";
+import { requireCurrentProfile } from "@/lib/auth/server";
 import { clean, readableStatus } from "@/lib/format";
 import type { Lead } from "@/lib/types";
 
@@ -60,11 +61,23 @@ export async function getLeads(limit = 250): Promise<Lead[]> {
 }
 
 export async function getQueueLeads(): Promise<Lead[]> {
+  const profile = await requireCurrentProfile();
   const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  let query = supabase
     .from("leads")
     .select(columns)
-    .in("status", ["new", "queued", "working", "contacted", "follow_up_scheduled", "qualified"])
+    .in("status", ["new", "queued", "working", "contacted", "follow_up_scheduled", "qualified"]);
+
+  if (profile.role !== "admin") {
+    query = query
+      .eq("assigned_to", profile.id)
+      .or(`last_contacted_at.is.null,last_contacted_at.lt.${thirtyDaysAgo.toISOString()}`);
+  }
+
+  const { data, error } = await query
     .order("score", { ascending: false })
     .order("created_at", { ascending: true })
     .limit(100);
