@@ -47,38 +47,38 @@ function parseCsv(text: string): CsvRow[] {
   let insideQuotes = false;
 
   for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-    const nextCharacter = text[index + 1];
+    const char = text[index];
+    const next = text[index + 1];
 
-    if (character === '"' && nextCharacter === '"') {
+    if (char === '"' && next === '"') {
       current += '"';
       index += 1;
       continue;
     }
 
-    if (character === '"') {
+    if (char === '"') {
       insideQuotes = !insideQuotes;
       continue;
     }
 
-    if (character === "," && !insideQuotes) {
+    if (char === "," && !insideQuotes) {
       row.push(current);
       current = "";
       continue;
     }
 
-    if ((character === "\n" || character === "\r") && !insideQuotes) {
-      if (character === "\r" && nextCharacter === "\n") index += 1;
+    if ((char === "\n" || char === "\r") && !insideQuotes) {
+      if (char === "\r" && next === "\n") index += 1;
       row.push(current);
-      current = "";
 
       if (row.some((cell) => cell.trim())) rows.push(row);
 
       row = [];
+      current = "";
       continue;
     }
 
-    current += character;
+    current += char;
   }
 
   row.push(current);
@@ -163,33 +163,19 @@ export async function importLeadsFromCsv(csvText: string): Promise<ImportResult>
     };
   }
 
-  const ownerEmails = Array.from(
-    new Set(
-      rows
-        .map((row) => get(row, ownerEmailColumns).toLowerCase())
-        .filter(Boolean)
-    )
-  );
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, email, is_active");
 
   const ownerMap = new Map<string, string>();
-  const unmatchedOwners = new Set<string>();
 
-  if (ownerEmails.length > 0) {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, email")
-      .in("email", ownerEmails);
-
-    for (const profile of profiles ?? []) {
-      if (profile.email && profile.id) {
-        ownerMap.set(profile.email.toLowerCase(), profile.id);
-      }
-    }
-
-    for (const email of ownerEmails) {
-      if (!ownerMap.has(email)) unmatchedOwners.add(email);
+  for (const profile of profiles ?? []) {
+    if (profile.id && profile.email && profile.is_active !== false) {
+      ownerMap.set(profile.email.toLowerCase().trim(), profile.id);
     }
   }
+
+  const unmatchedOwners = new Set<string>();
 
   const leads = rows
     .map((row) => {
@@ -204,8 +190,13 @@ export async function importLeadsFromCsv(csvText: string): Promise<ImportResult>
 
       if (!businessName) return null;
 
-      const ownerEmail = get(row, ownerEmailColumns).toLowerCase();
+      const ownerEmail = get(row, ownerEmailColumns).toLowerCase().trim();
       const assignedTo = ownerEmail ? ownerMap.get(ownerEmail) ?? null : null;
+
+      if (ownerEmail && !assignedTo) {
+        unmatchedOwners.add(ownerEmail);
+      }
+
       const notes = get(row, ["notes", "note", "current_notes", "pipeline_notes"]);
 
       const retainer = parseNumber(
@@ -269,7 +260,7 @@ export async function importLeadsFromCsv(csvText: string): Promise<ImportResult>
     throw new Error(error.message);
   }
 
-   return {
+  return {
     imported: leads.length,
     inserted: leads.length,
     skipped: rows.length - leads.length,
