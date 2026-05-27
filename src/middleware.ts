@@ -5,36 +5,23 @@ const publicRoutes = ["/login", "/setup"];
 
 function isPublicAsset(pathname: string) {
   return (
-    pathname.startsWith("/_next") ||
+    pathname.startsWith("/_next/static") ||
+    pathname.startsWith("/_next/image") ||
     pathname.startsWith("/favicon") ||
     pathname.startsWith("/robots") ||
     pathname.includes(".")
   );
 }
 
-function isPageNavigation(request: NextRequest) {
-  if (request.method !== "GET" && request.method !== "HEAD") return false;
-  if (request.headers.get("next-action")) return false;
-  if (request.headers.get("rsc")) return false;
-  if (request.nextUrl.searchParams.has("_rsc")) return false;
-
-  const accept = request.headers.get("accept") || "";
-  return accept.includes("text/html");
-}
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (
-    publicRoutes.some((route) => pathname.startsWith(route)) ||
-    isPublicAsset(pathname)
-  ) {
+  if (publicRoutes.some((route) => pathname.startsWith(route)) || isPublicAsset(pathname)) {
     return NextResponse.next();
   }
 
-  // Server Actions, form submits, RSC fetches, and client transitions must not be redirected here.
-  // The page loaders and server actions enforce the real role/ownership checks.
-  if (!isPageNavigation(request)) {
+  // Never intercept mutations or Server Actions. Those pages/actions do their own checks.
+  if (request.method !== "GET" && request.method !== "HEAD") {
     return NextResponse.next();
   }
 
