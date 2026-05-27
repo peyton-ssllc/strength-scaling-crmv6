@@ -1,12 +1,13 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const publicPaths = ["/login"];
+const publicRoutes = ["/login"];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (
-    publicPaths.some((path) => pathname.startsWith(path)) ||
+    publicRoutes.some((route) => pathname.startsWith(route)) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.includes(".")
@@ -14,26 +15,44 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (request.method !== "GET") {
+  // Let Server Actions, form posts, and mutations through. Page loads are protected.
+  if (request.method !== "GET" && request.method !== "HEAD") {
     return NextResponse.next();
   }
 
-  const accessCookie = request.cookies.get("strength_crm_access")?.value;
-  const accessPassword = process.env.CRM_ACCESS_PASSWORD;
+  let response = NextResponse.next({ request });
 
-  if (!accessPassword) {
-    return NextResponse.next();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.searchParams.set("next", pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
-  if (accessCookie === accessPassword) {
-    return NextResponse.next();
-  }
-
-  const loginUrl = request.nextUrl.clone();
-  loginUrl.pathname = "/login";
-  loginUrl.searchParams.set("next", pathname);
-
-  return NextResponse.redirect(loginUrl);
+  return response;
 }
 
 export const config = {
