@@ -16,9 +16,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
       <aside className="border-b border-white/10 bg-black/45 px-4 py-4 backdrop-blur lg:min-h-screen lg:border-b-0 lg:border-r lg:py-6">
-        <Link href="/queue" className="block rounded-lg px-2 py-1">
-          <div className="text-lg font-black tracking-tight text-white">Strength Scaling</div>
-          <div className="text-xs font-semibold text-slate-500">CRM</div>
+        <Link href="/queue" className="flex items-center gap-3 rounded-lg px-2 py-1">
+          <img src="/brand/strength-scaling-logo.png" alt="Strength Scaling" className="size-11 shrink-0 object-contain" />
+          <div>
+            <div className="text-lg font-black tracking-tight text-white">Strength Scaling</div>
+            <div className="text-xs font-semibold text-slate-500">CRM</div>
+          </div>
         </Link>
         <nav className="mt-7 grid gap-1">
           {nav.map(([label, href, Icon]) => (
