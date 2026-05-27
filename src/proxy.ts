@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const publicRoutes = ["/login", "/setup"];
+const publicRoutes = ["/auth", "/login", "/reset-password", "/setup"];
 const PUBLIC_FILE = /\.(?:avif|bmp|css|csv|gif|ico|jpg|jpeg|js|map|png|svg|txt|webp|woff|woff2)$/i;
 
 function isPublicAsset(pathname: string) {
@@ -32,6 +32,17 @@ export async function proxy(request: NextRequest) {
   // Never intercept mutations or Server Actions. Those pages/actions do their own checks.
   if (!isSafeNavigation(request) || request.headers.has("next-action")) {
     return NextResponse.next();
+  }
+
+  if (pathname !== "/auth/confirm" && (request.nextUrl.searchParams.has("code") || request.nextUrl.searchParams.has("token_hash"))) {
+    const confirmUrl = request.nextUrl.clone();
+    confirmUrl.pathname = "/auth/confirm";
+
+    if (!confirmUrl.searchParams.has("next")) {
+      confirmUrl.searchParams.set("next", "/reset-password");
+    }
+
+    return NextResponse.redirect(confirmUrl);
   }
 
   let response = NextResponse.next({ request });
