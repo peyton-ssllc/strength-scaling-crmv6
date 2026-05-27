@@ -1,11 +1,55 @@
-import { PageHeader } from "@/components/crm/page-header";
 import { ImportForm } from "@/components/crm/import-form";
+import { createSupabaseAdminClient } from "@/lib/admin";
 
-export default function ImportLeadsPage() {
+export const dynamic = "force-dynamic";
+
+async function getAssignableUsers() {
+  const supabase = createSupabaseAdminClient();
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, role, is_active")
+    .eq("is_active", true)
+    .order("full_name", { ascending: true });
+
+  return (data ?? []).map((user) => ({
+    id: user.id,
+    name: user.full_name || user.email || "Unnamed User",
+    email: user.email || "",
+  }));
+}
+
+export default async function ImportLeadsPage() {
+  const users = await getAssignableUsers();
+
   return (
-    <>
-      <PageHeader eyebrow="Import Leads" title="Lead import center" description="Upload gym owner CSVs directly into the CRM and send them straight into Contacts and My Queue." />
-      <div className="grid gap-5 lg:grid-cols-[1fr_380px]"><ImportForm /><aside className="surface p-5"><div className="label">Clean CSV Tips</div><p className="mt-3 text-sm leading-6 text-slate-300">Best columns are business name, owner or contact, phone, email, city, state, source, score, and notes. The importer accepts common column names automatically.</p></aside></div>
-    </>
+    <div className="space-y-8">
+      <div>
+        <p className="mb-3 inline-flex rounded-full border border-sky-300/30 bg-sky-400/10 px-3 py-1 text-xs font-bold text-sky-200">
+          Import Leads
+        </p>
+        <h1 className="text-4xl font-black tracking-tight text-white">
+          Lead import center
+        </h1>
+        <p className="mt-2 max-w-2xl text-slate-400">
+          Upload gym owner CSVs directly into the CRM and assign them to a rep before import.
+        </p>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
+        <ImportForm users={users} />
+
+        <aside className="rounded-2xl border border-sky-300/20 bg-sky-400/10 p-6">
+          <h2 className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-sky-200">
+            Clean CSV Tips
+          </h2>
+          <p className="text-sm leading-7 text-slate-300">
+            Pick the internal owner from the dropdown. Your CSV no longer needs an owner
+            email column. Best columns are business_name, contact_name, phone, email, city,
+            state, website, notes, source, and monthly_retainer.
+          </p>
+        </aside>
+      </div>
+    </div>
   );
 }
