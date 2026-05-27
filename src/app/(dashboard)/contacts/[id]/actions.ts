@@ -72,6 +72,42 @@ export async function addContactNote(formData: FormData) {
   revalidatePath(`/contacts/${leadId}`);
 }
 
+export async function addContactToPipeline(formData: FormData) {
+  const leadId = text(formData, "leadId");
+
+  if (!leadId) throw new Error("Missing lead id");
+
+  const supabase = createSupabaseAdminClient();
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("pipeline_notes")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  const pipelineNotes = lead?.pipeline_notes || "Added to pipeline from contact record.";
+  const { error: leadError } = await supabase
+    .from("leads")
+    .update({
+      pipeline_status: "follow_up",
+      pipeline_rank: "warm",
+      pipeline_notes: pipelineNotes
+    })
+    .eq("id", leadId);
+
+  if (leadError) throw new Error(leadError.message);
+
+  await supabase.from("activities").insert({
+    lead_id: leadId,
+    type: "pipeline_stage_changed",
+    outcome: "Added to Pipeline",
+    note: "Added to Pipeline & Clients."
+  });
+
+  revalidatePath("/contacts");
+  revalidatePath(`/contacts/${leadId}`);
+  revalidatePath("/pipeline-clients");
+}
+
 export async function assignContactOwner(formData: FormData) {
   const leadId = text(formData, "leadId");
   const ownerId = text(formData, "ownerId");
