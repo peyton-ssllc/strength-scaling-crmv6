@@ -162,7 +162,10 @@ function normalizePipelineRank(value: string) {
   return "warm";
 }
 
-export async function importLeadsFromCsv(csvText: string): Promise<ImportResult> {
+export async function importLeadsFromCsv(
+  csvText: string,
+  forcedAssignedTo?: string | null
+): Promise<ImportResult> {
   const supabase = createSupabaseAdminClient();
   const rows = parseCsv(csvText);
 
@@ -203,9 +206,10 @@ export async function importLeadsFromCsv(csvText: string): Promise<ImportResult>
       if (!businessName) return null;
 
       const ownerEmail = normalizeEmail(get(row, ownerEmailColumns));
-      const assignedTo = ownerEmail ? ownerMap.get(ownerEmail) ?? null : null;
+      const csvAssignedTo = ownerEmail ? ownerMap.get(ownerEmail) ?? null : null;
+      const assignedTo = forcedAssignedTo || csvAssignedTo;
 
-      if (ownerEmail && !assignedTo) {
+      if (ownerEmail && !csvAssignedTo) {
         unmatchedOwners.add(ownerEmail);
       }
 
@@ -287,7 +291,8 @@ export async function importLeadsFromFile(file: File): Promise<ImportResult> {
 
 export async function importCsvLeads(
   csvText: string,
-  _fileName?: string
+  _fileName?: string,
+  assignedTo?: string | null
 ): Promise<ImportResult> {
-  return importLeadsFromCsv(csvText);
+  return importLeadsFromCsv(csvText, assignedTo);
 }
