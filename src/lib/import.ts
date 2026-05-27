@@ -279,3 +279,4 @@ export async function importLeadsFromFile(file: File): Promise<ImportResult> {
   const text = await file.text();
   return importLeadsFromCsv(text);
 }
+export const importCsvLeads = importLeadsFromCsv;
