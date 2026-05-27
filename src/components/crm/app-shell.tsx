@@ -31,6 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="badge mb-3">Operating Mode</div>
           <p className="leading-5">Queue, contacts, reporting, calendar, and pipeline. Nothing extra in the way.</p>
         </div>
+        <Link href="/logout" className="mt-4 flex h-10 items-center rounded-lg px-3 text-sm font-bold text-slate-500 hover:bg-white/[.04] hover:text-white">Sign Out</Link>
       </aside>
       <main className="min-w-0">
         <header className="sticky top-0 z-10 border-b border-white/10 bg-[#030712]/78 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
