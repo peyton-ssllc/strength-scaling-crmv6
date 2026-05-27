@@ -42,10 +42,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="min-w-0">
         <header className="sticky top-0 z-10 border-b border-white/10 bg-[#030712]/78 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-            <div className="hidden h-10 w-full max-w-md items-center gap-3 rounded-lg border border-white/10 bg-white/[.035] px-3 text-sm text-slate-500 sm:flex">
-              <Search className="size-4" /> Search leads, clients, reps
-              <span className="ml-auto rounded border border-white/10 px-1.5 py-.5 text-xs">⌘ K</span>
-            </div>
+            <form action="/contacts" className="hidden h-10 w-full max-w-md items-center gap-3 rounded-lg border border-white/10 bg-white/[.035] px-3 text-sm text-slate-500 sm:flex">
+              <Search className="size-4" />
+              <input name="q" className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-slate-500" placeholder="Search contacts..." />
+              <button type="submit" className="rounded border border-white/10 px-1.5 py-.5 text-xs font-bold text-slate-300 hover:text-white">Go</button>
+            </form>
             <div className="ml-auto flex items-center gap-3">
               <button className="grid size-10 place-items-center rounded-lg border border-white/10 bg-white/[.035] text-slate-300"><Bell className="size-4" /></button>
               <div className="text-right"><div className="text-sm font-bold text-white">Admin View</div><div className="text-xs text-slate-500">Strength Scaling</div></div>
