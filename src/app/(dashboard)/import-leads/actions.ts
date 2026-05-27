@@ -14,7 +14,11 @@ export async function uploadLeads(
 ): Promise<UploadLeadsState> {
   try {
     const file = formData.get("file");
-    const assignedTo = String(formData.get("assigned_to") || "").trim() || null;
+    const assignedToValue = formData.get("assigned_to");
+    const assignedTo =
+      typeof assignedToValue === "string" && assignedToValue.trim()
+        ? assignedToValue.trim()
+        : null;
 
     if (!(file instanceof File)) {
       return { ok: false, message: "Choose a CSV file first." };
@@ -30,7 +34,9 @@ export async function uploadLeads(
 
     return {
       ok: true,
-      message: `Imported ${result.inserted} leads. ${assignedTo ? "Owner assigned." : "No owner selected."}`,
+      message: `Imported ${result.inserted} leads. ${
+        assignedTo ? "Owner assigned." : "No owner selected."
+      }`,
     };
   } catch (error) {
     return {
