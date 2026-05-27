@@ -13,15 +13,21 @@ function statusClass(status: string) {
   return "border-white/10 bg-white/[0.06] text-slate-200";
 }
 
-export default async function ContactsPage() {
-  const contacts = await getContacts();
+type ContactsPageProps = {
+  searchParams?: Promise<{ q?: string }>;
+};
+
+export default async function ContactsPage({ searchParams }: ContactsPageProps) {
+  const params = await searchParams;
+  const q = params?.q?.trim() || "";
+  const contacts = await getContacts(q);
 
   return (
     <div className="space-y-8">
       <div><p className="mb-3 inline-flex rounded-full border border-sky-300/30 bg-sky-400/10 px-3 py-1 text-xs font-bold text-sky-200">Contacts</p><h1 className="text-4xl font-black tracking-tight text-white">Lead database</h1><p className="mt-2 text-slate-400">Admins see every lead. SDRs only see contacts assigned to them.</p></div>
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70">
         <div className="flex flex-col gap-3 border-b border-white/10 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex h-11 max-w-md items-center gap-3 rounded-xl border border-white/10 bg-black/25 px-4 text-sm text-slate-400"><Search className="size-4 text-slate-500" /><span>{contacts.length} contacts loaded</span></div>
+          <form action="/contacts" className="flex h-11 w-full max-w-md items-center gap-3 rounded-xl border border-white/10 bg-black/25 px-4 text-sm text-slate-400"><Search className="size-4 text-slate-500" /><input name="q" defaultValue={q} placeholder="Search contacts..." className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-slate-500" /><button className="text-xs font-black uppercase tracking-[0.16em] text-sky-200" type="submit">Search</button></form>
           <div className="flex gap-3"><Link href="/contacts/new" className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white"><Plus className="size-4" />Add Contact</Link><Link href="/import-leads" className="inline-flex h-11 items-center gap-2 rounded-xl bg-sky-400 px-4 text-sm font-black text-black"><Upload className="size-4" />Import Leads</Link></div>
         </div>
         <div className="grid grid-cols-[1.3fr_1fr_1fr_170px_80px] border-b border-white/10 bg-white/[0.02] px-5 py-3 text-xs font-black uppercase tracking-[0.22em] text-slate-500"><div>Lead</div><div>Contact</div><div>Owner</div><div>Status</div><div className="text-right">Score</div></div>
@@ -35,7 +41,7 @@ export default async function ContactsPage() {
               <div className="text-right text-lg font-black text-sky-200">{contact.score}</div>
             </Link>
           ))}
-          {contacts.length === 0 && <div className="px-5 py-12 text-center text-slate-500">No contacts found for this login.</div>}
+          {contacts.length === 0 && <div className="px-5 py-12 text-center text-slate-500">{q ? "No contacts match that search." : "No contacts found for this login."}</div>}
         </div>
       </section>
     </div>
