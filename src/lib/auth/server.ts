@@ -19,7 +19,15 @@ export async function getCurrentUser() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return user;
+  if (user) return user;
+
+  // Vercel/Next internal navigation can occasionally reach a Server Component before
+  // middleware has refreshed the cookie. This fallback prevents a false logout.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  return session?.user ?? null;
 }
 
 export async function getCurrentProfile(): Promise<CurrentProfile | null> {
