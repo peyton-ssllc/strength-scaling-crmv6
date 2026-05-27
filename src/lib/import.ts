@@ -9,290 +9,109 @@ export type ImportResult = {
   unmatchedOwners: string[];
 };
 
-const ownerEmailColumns = [
-  "assigned_to_email",
-  "owner_email",
-  "rep_email",
-  "sdr_email",
-  "contact_owner_email",
-];
+const ownerEmailColumns = ["assigned_to_email", "owner_email", "rep_email", "sdr_email", "contact_owner_email"];
 
-function clean(value: unknown) {
-  return String(value ?? "").trim();
-}
-
-function normalizeEmail(value: string) {
-  return clean(value).toLowerCase().replace(/\s+/g, "");
-}
-
-function normalizeHeader(header: string) {
-  return clean(header).toLowerCase().replace(/\s+/g, "_");
-}
-
-function get(row: CsvRow, keys: string[]) {
-  for (const key of keys) {
-    const value = row[normalizeHeader(key)];
-    if (value) return clean(value);
-  }
-
-  return "";
-}
-
-function parseNumber(value: string, fallback = 0) {
-  const cleaned = clean(value).replace(/[$,]/g, "");
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
+function clean(value: unknown) { return String(value ?? "").trim(); }
+function normalizeEmail(value: string) { return clean(value).toLowerCase().replace(/\s+/g, ""); }
+function normalizeHeader(header: string) { return clean(header).toLowerCase().replace(/\s+/g, "_"); }
+function get(row: CsvRow, keys: string[]) { for (const key of keys) { const value = row[normalizeHeader(key)]; if (value) return clean(value); } return ""; }
+function parseNumber(value: string, fallback = 0) { const parsed = Number(clean(value).replace(/[$,]/g, "")); return Number.isFinite(parsed) ? parsed : fallback; }
 
 function parseCsv(text: string): CsvRow[] {
   const rows: string[][] = [];
   let current = "";
   let row: string[] = [];
   let insideQuotes = false;
-
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
     const next = text[index + 1];
-
-    if (char === '"' && next === '"') {
-      current += '"';
-      index += 1;
-      continue;
-    }
-
-    if (char === '"') {
-      insideQuotes = !insideQuotes;
-      continue;
-    }
-
-    if (char === "," && !insideQuotes) {
-      row.push(current);
-      current = "";
-      continue;
-    }
-
+    if (char === '"' && next === '"') { current += '"'; index += 1; continue; }
+    if (char === '"') { insideQuotes = !insideQuotes; continue; }
+    if (char === "," && !insideQuotes) { row.push(current); current = ""; continue; }
     if ((char === "\n" || char === "\r") && !insideQuotes) {
       if (char === "\r" && next === "\n") index += 1;
-
       row.push(current);
-
-      if (row.some((cell) => cell.trim())) {
-        rows.push(row);
-      }
-
+      if (row.some((cell) => cell.trim())) rows.push(row);
       row = [];
       current = "";
       continue;
     }
-
     current += char;
   }
-
   row.push(current);
-
-  if (row.some((cell) => cell.trim())) {
-    rows.push(row);
-  }
-
+  if (row.some((cell) => cell.trim())) rows.push(row);
   const headers = rows[0]?.map(normalizeHeader) ?? [];
-
   return rows.slice(1).map((cells) => {
     const output: CsvRow = {};
-
-    headers.forEach((header, index) => {
-      output[header] = clean(cells[index]);
-    });
-
+    headers.forEach((header, index) => { output[header] = clean(cells[index]); });
     return output;
   });
 }
 
 function normalizeLeadStatus(value: string) {
   const status = value.toLowerCase().replace(/\s+/g, "_");
-
-  const map: Record<string, string> = {
-    new: "new",
-    queued: "queued",
-    working: "working",
-    called: "contacted",
-    contacted: "contacted",
-    follow_up: "follow_up_scheduled",
-    follow_up_scheduled: "follow_up_scheduled",
-    booked: "meeting_booked",
-    meeting_booked: "meeting_booked",
-    interested: "qualified",
-    qualified: "qualified",
-    unqualified: "unqualified",
-    bad_data: "bad_data",
-    dnc: "do_not_contact",
-    do_not_contact: "do_not_contact",
-    converted: "converted",
-    lost: "lost",
-  };
-
+  const map: Record<string, string> = { new: "new", queued: "queued", working: "working", called: "contacted", contacted: "contacted", follow_up: "follow_up_scheduled", follow_up_scheduled: "follow_up_scheduled", booked: "meeting_booked", meeting_booked: "meeting_booked", interested: "qualified", qualified: "qualified", unqualified: "unqualified", bad_data: "bad_data", dnc: "do_not_contact", do_not_contact: "do_not_contact", converted: "converted", lost: "lost" };
   return map[status] ?? "new";
 }
-
 function normalizePipelineStatus(value: string) {
   const status = value.toLowerCase().replace(/\s+/g, "_");
-
-  const map: Record<string, string> = {
-    active: "active",
-    booked: "active",
-    hot: "next_up",
-    next_up: "next_up",
-    next: "next_up",
-    warm: "follow_up",
-    follow_up: "follow_up",
-    cold: "cold",
-    paused: "paused",
-    former: "former",
-    lost: "former",
-  };
-
+  const map: Record<string, string> = { active: "active", booked: "active", hot: "next_up", next_up: "next_up", next: "next_up", warm: "follow_up", follow_up: "follow_up", cold: "cold", paused: "paused", former: "former", lost: "former" };
   return map[status] ?? "next_up";
 }
+function normalizePipelineRank(value: string) { const rank = value.toLowerCase().replace(/\s+/g, "_"); if (["hot", "warm", "cold"].includes(rank)) return rank; if (["active", "booked"].includes(rank)) return "hot"; return "warm"; }
 
-function normalizePipelineRank(value: string) {
-  const rank = value.toLowerCase().replace(/\s+/g, "_");
-
-  if (["hot", "warm", "cold"].includes(rank)) return rank;
-  if (["active", "booked"].includes(rank)) return "hot";
-
-  return "warm";
-}
-
-export async function importLeadsFromCsv(
-  csvText: string,
-  forcedAssignedTo?: string | null
-): Promise<ImportResult> {
+export async function importLeadsFromCsv(csvText: string, forcedAssignedTo?: string | null): Promise<ImportResult> {
   const supabase = createSupabaseAdminClient();
   const rows = parseCsv(csvText);
+  if (rows.length === 0) return { imported: 0, inserted: 0, skipped: 0, unmatchedOwners: [] };
 
-  if (rows.length === 0) {
-    return {
-      imported: 0,
-      inserted: 0,
-      skipped: 0,
-      unmatchedOwners: [],
-    };
-  }
-
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, email, is_active");
-
+  const { data: profiles } = await supabase.from("profiles").select("id, email, is_active");
   const ownerMap = new Map<string, string>();
-
   for (const profile of profiles ?? []) {
-    if (profile.id && profile.email && profile.is_active !== false) {
-      ownerMap.set(normalizeEmail(profile.email), profile.id);
-    }
+    if (profile.id && profile.email && profile.is_active !== false) ownerMap.set(normalizeEmail(profile.email), profile.id);
   }
 
   const unmatchedOwners = new Set<string>();
-
-  const leads = rows
-    .map((row) => {
-      const businessName = get(row, [
-        "business_name",
-        "business",
-        "gym_name",
-        "gym",
-        "company",
-        "account",
-      ]);
-
-      if (!businessName) return null;
-
-      const ownerEmail = normalizeEmail(get(row, ownerEmailColumns));
-      const csvAssignedTo = ownerEmail ? ownerMap.get(ownerEmail) ?? null : null;
-      const assignedTo = forcedAssignedTo || csvAssignedTo;
-
-      if (ownerEmail && !csvAssignedTo) {
-        unmatchedOwners.add(ownerEmail);
-      }
-
-      const notes = get(row, ["notes", "note", "current_notes", "pipeline_notes"]);
-
-      const retainer = parseNumber(
-        get(row, [
-          "monthly_retainer",
-          "retainer",
-          "monthly_revenue",
-          "potential_revenue",
-          "potential",
-        ]),
-        0
-      );
-
-      const profit = parseNumber(
-        get(row, ["estimated_monthly_profit", "monthly_profit", "profit"]),
-        retainer
-      );
-
-      return {
-        business_name: businessName,
-        contact_name: get(row, ["contact_name", "contact", "primary_contact"]),
-        owner_name: get(row, ["owner_name", "owner", "gym_owner"]),
-        phone: get(row, ["phone", "phone_number", "mobile"]),
-        email: get(row, ["email", "contact_email"]),
-        website: get(row, ["website", "url", "site"]),
-        instagram_url: get(row, ["instagram", "instagram_url", "ig"]),
-        city: get(row, ["city"]),
-        state: get(row, ["state"]),
-        country: get(row, ["country"]) || "US",
-        lead_source: get(row, ["lead_source", "source"]) || "CSV Import",
-        status: normalizeLeadStatus(get(row, ["status", "lead_status"])),
-        score: parseNumber(get(row, ["score", "lead_score"]), 75),
-        assigned_to: assignedTo,
-        notes,
-        notes_summary: notes,
-        pipeline_status: normalizePipelineStatus(
-          get(row, ["pipeline_status", "pipeline_stage", "stage"])
-        ),
-        pipeline_rank: normalizePipelineRank(
-          get(row, ["pipeline_rank", "lead_ranking", "ranking", "rank"])
-        ),
-        monthly_retainer: retainer,
-        estimated_monthly_profit: profit,
-        pipeline_notes: notes,
-      };
-    })
-    .filter((lead): lead is NonNullable<typeof lead> => lead !== null);
-
-  if (leads.length === 0) {
+  const leads = rows.map((row) => {
+    const businessName = get(row, ["business_name", "business", "gym_name", "gym", "company", "account"]);
+    if (!businessName) return null;
+    const ownerEmail = normalizeEmail(get(row, ownerEmailColumns));
+    const csvAssignedTo = ownerEmail ? ownerMap.get(ownerEmail) ?? null : null;
+    const assignedTo = forcedAssignedTo || csvAssignedTo;
+    if (ownerEmail && !csvAssignedTo) unmatchedOwners.add(ownerEmail);
+    const notes = get(row, ["notes", "note", "current_notes", "pipeline_notes"]);
+    const retainer = parseNumber(get(row, ["monthly_retainer", "retainer", "monthly_revenue", "potential_revenue", "potential"]), 0);
+    const profit = parseNumber(get(row, ["estimated_monthly_profit", "monthly_profit", "profit"]), retainer);
     return {
-      imported: 0,
-      inserted: 0,
-      skipped: rows.length,
-      unmatchedOwners: Array.from(unmatchedOwners),
+      business_name: businessName,
+      contact_name: get(row, ["contact_name", "contact", "primary_contact"]),
+      owner_name: get(row, ["owner_name", "owner", "gym_owner"]),
+      phone: get(row, ["phone", "phone_number", "mobile"]),
+      email: get(row, ["email", "contact_email"]),
+      website: get(row, ["website", "url", "site"]),
+      instagram_url: get(row, ["instagram", "instagram_url", "ig"]),
+      city: get(row, ["city"]),
+      state: get(row, ["state"]),
+      country: get(row, ["country"]) || "US",
+      lead_source: get(row, ["lead_source", "source"]) || "CSV Import",
+      status: normalizeLeadStatus(get(row, ["status", "lead_status"])),
+      score: parseNumber(get(row, ["score", "lead_score"]), 75),
+      assigned_to: assignedTo,
+      notes,
+      notes_summary: notes,
+      pipeline_status: normalizePipelineStatus(get(row, ["pipeline_status", "pipeline_stage", "stage"])),
+      pipeline_rank: normalizePipelineRank(get(row, ["pipeline_rank", "lead_ranking", "ranking", "rank"])),
+      monthly_retainer: retainer,
+      estimated_monthly_profit: profit,
+      pipeline_notes: notes,
     };
-  }
+  }).filter((lead): lead is NonNullable<typeof lead> => lead !== null);
 
+  if (leads.length === 0) return { imported: 0, inserted: 0, skipped: rows.length, unmatchedOwners: Array.from(unmatchedOwners) };
   const { error } = await supabase.from("leads").insert(leads);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return {
-    imported: leads.length,
-    inserted: leads.length,
-    skipped: rows.length - leads.length,
-    unmatchedOwners: Array.from(unmatchedOwners),
-  };
+  if (error) throw new Error(error.message);
+  return { imported: leads.length, inserted: leads.length, skipped: rows.length - leads.length, unmatchedOwners: Array.from(unmatchedOwners) };
 }
 
-export async function importLeadsFromFile(file: File): Promise<ImportResult> {
-  const text = await file.text();
-  return importLeadsFromCsv(text);
-}
-
-export async function importCsvLeads(
-  csvText: string,
-  _fileName?: string,
-  assignedTo?: string | null
-): Promise<ImportResult> {
-  return importLeadsFromCsv(csvText, assignedTo);
-}
+export async function importLeadsFromFile(file: File): Promise<ImportResult> { const text = await file.text(); return importLeadsFromCsv(text); }
+export async function importCsvLeads(csvText: string, _fileName?: string, assignedTo?: string | null): Promise<ImportResult> { return importLeadsFromCsv(csvText, assignedTo); }
