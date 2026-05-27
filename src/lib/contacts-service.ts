@@ -35,18 +35,35 @@ function readableStatus(status: string | null | undefined) {
   return status ? map[status] || status : "New";
 }
 
-export async function getContacts(): Promise<ContactLead[]> {
+function searchTerm(value: string) {
+  return value.trim().replaceAll("%", "").replaceAll(",", " ").slice(0, 80);
+}
+
+export async function getContacts(search = ""): Promise<ContactLead[]> {
   const profile = await requireCurrentProfile();
   const supabase = createSupabaseAdminClient();
 
   let query = supabase
     .from("leads")
-    .select("id, business_name, contact_name, owner_name, phone, email, city, state, status, score, lead_source, assigned_to")
-    .order("created_at", { ascending: false });
+    .select("id, business_name, contact_name, owner_name, phone, email, city, state, status, score, lead_source, assigned_to");
 
   query = applyLeadVisibility(query, profile);
 
-  const { data, error } = await query;
+  const q = searchTerm(search);
+  if (q) {
+    const pattern = `%${q}%`;
+    query = query.or([
+      `business_name.ilike.${pattern}`,
+      `contact_name.ilike.${pattern}`,
+      `owner_name.ilike.${pattern}`,
+      `phone.ilike.${pattern}`,
+      `email.ilike.${pattern}`,
+      `city.ilike.${pattern}`,
+      `state.ilike.${pattern}`
+    ].join(","));
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false });
 
   if (error) {
     console.error("Failed to load contacts", error);
