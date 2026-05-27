@@ -25,9 +25,13 @@ function monthlyProfit(lead: Awaited<ReturnType<typeof getLeads>>[number]) {
   return Number(lead.estimatedMonthlyProfit || lead.monthlyRetainer || 0);
 }
 
+function isPipelineAccount(lead: Awaited<ReturnType<typeof getLeads>>[number]) {
+  return lead.source === "Pipeline Manual Entry" || lead.pipelineStatus !== "next_up" || monthlyProfit(lead) > 0 || Boolean(lead.pipelineNotes);
+}
+
 export default async function PipelineClientsPage() {
   const leads = (await getLeads(500)).filter((lead) => !["DNC"].includes(lead.status));
-  const accounts = leads.filter((lead) => lead.source === "Pipeline Manual Entry" || lead.pipelineStatus !== "next_up" || lead.monthlyRetainer > 0 || ["Interested", "Booked", "Follow Up", "Client"].includes(lead.status));
+  const accounts = leads.filter(isPipelineAccount);
   const active = accounts.filter((lead) => lead.pipelineStatus === "active" || lead.status === "Client" || lead.status === "Booked");
   const hot = accounts.filter((lead) => lead.pipelineRank === "hot").length;
   const warm = accounts.filter((lead) => lead.pipelineRank === "warm").length;
