@@ -21,13 +21,20 @@ export async function getCurrentUser() {
 
   if (user) return user;
 
-  // Vercel/Next internal navigation can occasionally reach a Server Component before
-  // middleware has refreshed the cookie. This fallback prevents a false logout.
+  // Next internal navigation can occasionally reach a Server Component before the
+  // proxy-refreshed cookie is visible here. Use the session only to recover a token,
+  // then verify that token with getUser() before treating the user as authenticated.
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  return session?.user ?? null;
+  if (!session?.access_token) return null;
+
+  const {
+    data: { user: verifiedUser },
+  } = await supabase.auth.getUser(session.access_token);
+
+  return verifiedUser ?? null;
 }
 
 export async function getCurrentProfile(): Promise<CurrentProfile | null> {
