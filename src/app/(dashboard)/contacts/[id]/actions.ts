@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseAdminClient } from "@/lib/supabase";
+import { createSupabaseAdminClient } from "@/lib/admin";
+import { requireCurrentProfile } from "@/lib/auth/server";
 import { normalizeStatus, todayIso } from "@/lib/format";
 
 function text(formData: FormData, key: string) {
@@ -9,6 +10,7 @@ function text(formData: FormData, key: string) {
 }
 
 export async function logContactOutcome(formData: FormData) {
+  const profile = await requireCurrentProfile();
   const leadId = text(formData, "leadId");
   const outcome = text(formData, "outcome") || "Called";
   const note = text(formData, "note");
@@ -19,6 +21,7 @@ export async function logContactOutcome(formData: FormData) {
 
   const { error: activityError } = await supabase.from("activities").insert({
     lead_id: leadId,
+    rep_id: profile.id,
     type: "call",
     outcome,
     note
@@ -46,6 +49,7 @@ export async function logContactOutcome(formData: FormData) {
 }
 
 export async function addContactNote(formData: FormData) {
+  const profile = await requireCurrentProfile();
   const leadId = text(formData, "leadId");
   const note = text(formData, "note");
 
@@ -56,6 +60,7 @@ export async function addContactNote(formData: FormData) {
 
   const { error: activityError } = await supabase.from("activities").insert({
     lead_id: leadId,
+    rep_id: profile.id,
     type: "note",
     outcome: "Note Added",
     note
@@ -73,6 +78,7 @@ export async function addContactNote(formData: FormData) {
 }
 
 export async function addContactToPipeline(formData: FormData) {
+  const profile = await requireCurrentProfile();
   const leadId = text(formData, "leadId");
 
   if (!leadId) throw new Error("Missing lead id");
@@ -98,6 +104,7 @@ export async function addContactToPipeline(formData: FormData) {
 
   await supabase.from("activities").insert({
     lead_id: leadId,
+    rep_id: profile.id,
     type: "pipeline_stage_changed",
     outcome: "Added to Pipeline",
     note: "Added to Pipeline & Clients."
@@ -109,6 +116,7 @@ export async function addContactToPipeline(formData: FormData) {
 }
 
 export async function assignContactOwner(formData: FormData) {
+  const profile = await requireCurrentProfile();
   const leadId = text(formData, "leadId");
   const ownerId = text(formData, "ownerId");
 
@@ -128,6 +136,7 @@ export async function assignContactOwner(formData: FormData) {
 
   await supabase.from("activities").insert({
     lead_id: leadId,
+    rep_id: profile.id,
     type: "status_change",
     outcome: "Owner Updated",
     note: ownerId ? `Assigned to ${owner?.full_name || owner?.email || "team member"}` : "Owner cleared"
@@ -136,4 +145,5 @@ export async function assignContactOwner(formData: FormData) {
   revalidatePath("/contacts");
   revalidatePath(`/contacts/${leadId}`);
   revalidatePath("/queue");
+  revalidatePath("/dashboard");
 }
