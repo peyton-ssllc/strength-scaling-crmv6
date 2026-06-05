@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseAdminClient } from "@/lib/supabase";
+import { createSupabaseAdminClient } from "@/lib/admin";
+import { requireCurrentProfile } from "@/lib/auth/server";
 import { normalizeStatus, todayIso } from "@/lib/format";
 
 export async function logLeadOutcome(formData: FormData) {
+  const profile = await requireCurrentProfile();
   const leadId = String(formData.get("leadId") || "");
   const outcome = String(formData.get("outcome") || "called");
   const note = String(formData.get("note") || "");
@@ -17,6 +19,7 @@ export async function logLeadOutcome(formData: FormData) {
 
   const { error: activityError } = await supabase.from("activities").insert({
     lead_id: leadId,
+    rep_id: profile.id,
     type: "call",
     outcome,
     note
@@ -35,4 +38,5 @@ export async function logLeadOutcome(formData: FormData) {
 
   revalidatePath("/queue");
   revalidatePath("/contacts");
+  revalidatePath("/dashboard");
 }
