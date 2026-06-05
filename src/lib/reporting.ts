@@ -72,19 +72,25 @@ export async function getDashboardReport(selectedRep: string = "all", days: numb
   if (effectiveRep === "unassigned") leadsQuery = leadsQuery.is("assigned_to", null);
 
   const { data: leads } = await leadsQuery;
+  const safeLeads = leads ?? [];
+  const selectedLeadIds = new Set(safeLeads.map((lead) => lead.id));
 
-  let activitiesQuery = supabase
+  const { data: activities } = await supabase
     .from("activities")
     .select("id, lead_id, rep_id, type, outcome, created_at")
     .gte("created_at", since)
     .order("created_at", { ascending: false });
 
-  if (effectiveRep !== "all" && effectiveRep !== "unassigned") activitiesQuery = activitiesQuery.eq("rep_id", effectiveRep);
-  if (effectiveRep === "unassigned") activitiesQuery = activitiesQuery.is("rep_id", null);
+  const recentActivities = activities ?? [];
+  const safeActivities = recentActivities.filter((activity) => {
+    if (effectiveRep === "all") return true;
+    if (effectiveRep === "unassigned") {
+      return !activity.rep_id && selectedLeadIds.has(activity.lead_id);
+    }
 
-  const { data: activities } = await activitiesQuery;
-  const safeLeads = leads ?? [];
-  const safeActivities = activities ?? [];
+    return activity.rep_id === effectiveRep || selectedLeadIds.has(activity.lead_id);
+  });
+
   const calls = safeActivities.filter((activity) => activity.type === "call");
   const callsToday = calls.filter((activity) => activity.created_at >= today);
   const bookedThisWeek = safeActivities.filter(
