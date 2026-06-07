@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Building2, CalendarClock, Mail, MapPin, NotebookPen, Phone, UserRound } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, ChevronLeft, ChevronRight, Mail, MapPin, NotebookPen, Phone, UserRound } from "lucide-react";
 import { PageHeader } from "@/components/crm/page-header";
-import { getLeadActivities, getLeadById, getLeadOwner, getTeamMembers } from "@/lib/leads";
+import { getLeadActivities, getLeadById, getLeadNavigation, getLeadOwner, getTeamMembers } from "@/lib/leads";
 import { deleteContact } from "../actions";
 import { addContactNote, addContactToPipeline, assignContactOwner, logContactOutcome } from "./actions";
 
@@ -42,15 +42,45 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
 
   const inPipeline = isPipelineAccount(contact);
 
-  const [activities, members, owner] = await Promise.all([
+  const [activities, members, owner, navigation] = await Promise.all([
     getLeadActivities(id),
     getTeamMembers(),
-    getLeadOwner(contact.assignedTo)
+    getLeadOwner(contact.assignedTo),
+    getLeadNavigation(id)
   ]);
 
   return (
     <>
-      <Link href="/contacts" className="mb-5 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white"><ArrowLeft className="size-4" /> Back to contacts</Link>
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <Link href="/contacts" className="inline-flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-white"><ArrowLeft className="size-4" /> Back to contacts</Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-bold text-slate-400">
+            {navigation.currentIndex >= 0 ? `${navigation.currentIndex + 1} of ${navigation.total}` : `${navigation.total} contacts`}
+          </div>
+          {navigation.previous ? (
+            <Link href={`/contacts/${navigation.previous.id}`} className="inline-flex items-center gap-2 rounded-xl border border-sky-300/30 bg-sky-400/10 px-4 py-2 text-sm font-black text-sky-100 hover:bg-sky-400/20">
+              <ChevronLeft className="size-4" />
+              <span className="max-w-40 truncate">{navigation.previous.business}</span>
+            </Link>
+          ) : (
+            <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-black text-slate-600">
+              <ChevronLeft className="size-4" />
+              Previous
+            </span>
+          )}
+          {navigation.next ? (
+            <Link href={`/contacts/${navigation.next.id}`} className="inline-flex items-center gap-2 rounded-xl border border-sky-300/30 bg-sky-400/10 px-4 py-2 text-sm font-black text-sky-100 hover:bg-sky-400/20">
+              <span className="max-w-40 truncate">{navigation.next.business}</span>
+              <ChevronRight className="size-4" />
+            </Link>
+          ) : (
+            <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-black text-slate-600">
+              Next
+              <ChevronRight className="size-4" />
+            </span>
+          )}
+        </div>
+      </div>
       <PageHeader eyebrow="Contact Record" title={contact.business} description="Owner, notes, contact details, call logging, pipeline context, and complete timestamped activity." />
 
       <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
