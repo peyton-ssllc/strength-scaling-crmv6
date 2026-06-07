@@ -1,6 +1,7 @@
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { requireCurrentProfile } from "@/lib/auth/server";
 import { clean, readableStatus } from "@/lib/format";
+import { applyLeadVisibility } from "@/lib/permissions";
 import type { Lead } from "@/lib/types";
 
 const columns = "id,business_name,contact_name,owner_name,phone,email,city,state,status,score,lead_source,notes,notes_summary,last_contacted_at,created_at,pipeline_status,pipeline_rank,monthly_retainer,estimated_monthly_profit,pipeline_notes,assigned_to";
@@ -90,6 +91,40 @@ export async function getLeadById(id: string): Promise<Lead | null> {
   const { data, error } = await supabase.from("leads").select(columns).eq("id", id).maybeSingle();
   if (error || !data) return null;
   return toLead(data as LeadRow);
+}
+
+export async function getLeadNavigation(currentId: string) {
+  const profile = await requireCurrentProfile();
+  const supabase = createSupabaseAdminClient();
+
+  let query = supabase
+    .from("leads")
+    .select("id,business_name,contact_name,owner_name,created_at")
+    .order("created_at", { ascending: false })
+    .limit(5000);
+
+  query = applyLeadVisibility(query, profile);
+
+  const { data, error } = await query;
+
+  if (error || !data) {
+    return { previous: null, next: null, currentIndex: -1, total: 0 };
+  }
+
+  const contacts = data.map((lead) => ({
+    id: lead.id,
+    business: clean(lead.business_name) || "Unnamed Business",
+    contact: clean(lead.contact_name) || clean(lead.owner_name),
+  }));
+
+  const currentIndex = contacts.findIndex((lead) => lead.id === currentId);
+
+  return {
+    previous: currentIndex > 0 ? contacts[currentIndex - 1] : null,
+    next: currentIndex >= 0 && currentIndex < contacts.length - 1 ? contacts[currentIndex + 1] : null,
+    currentIndex,
+    total: contacts.length,
+  };
 }
 
 export async function getLeadActivities(leadId: string) {
