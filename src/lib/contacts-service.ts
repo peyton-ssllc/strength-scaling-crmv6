@@ -39,7 +39,24 @@ function searchTerm(value: string) {
   return value.trim().replaceAll("%", "").replaceAll(",", " ").slice(0, 80);
 }
 
-export async function getContacts(search = ""): Promise<ContactLead[]> {
+function outcomeStatuses(outcome: string) {
+  const normalized = outcome.trim().toLowerCase().replace(/\s+/g, "_");
+  const map: Record<string, string[]> = {
+    new: ["new", "queued", "working"],
+    called: ["contacted"],
+    follow_up: ["follow_up_scheduled"],
+    interested: ["qualified"],
+    booked: ["meeting_booked", "converted"],
+    dnc: ["do_not_contact"],
+    lost: ["lost"],
+    bad_data: ["bad_data"],
+    unqualified: ["unqualified"],
+  };
+
+  return map[normalized] ?? [];
+}
+
+export async function getContacts(search = "", outcome = ""): Promise<ContactLead[]> {
   const profile = await requireCurrentProfile();
   const supabase = createSupabaseAdminClient();
 
@@ -48,6 +65,11 @@ export async function getContacts(search = ""): Promise<ContactLead[]> {
     .select("id, business_name, contact_name, owner_name, phone, email, city, state, status, score, lead_source, assigned_to");
 
   query = applyLeadVisibility(query, profile);
+
+  const statuses = outcomeStatuses(outcome);
+  if (statuses.length > 0) {
+    query = query.in("status", statuses);
+  }
 
   const q = searchTerm(search);
   if (q) {
